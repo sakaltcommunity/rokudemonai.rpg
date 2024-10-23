@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ろくでもないRPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style>
+      #controls {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        padding: 10px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      #buyMenu {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        display: none;
+        background-color: rgba(255, 255, 255, 0.8);
+        border: 1px solid #ccc;
+        padding: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+      <button id="up">↑</button>
+      <button id="down">↓</button>
+      <button id="left">←</button>
+      <button id="right">→</button>
+      <button id="attackButton" style="display: none;">攻撃</button>
+      <button id="buyButton" style="display: none;">購入</button>
+    </div>
+    <div id="buyMenu">
+      <div id="buyMessage"></div>
+      <button id="confirmBuy">購入確定</button>
+      <button id="cancelBuy">キャンセル</button>
+    </div>
+
+    <script>
+      const config = {
+        type: Phaser.AUTO,
+        width: 800,
+        height: 600,
+        physics: {
+          default: 'arcade',
+          arcade: {
+            gravity: { y: 0 },
+            debug: false,
+          },
+        },
+        scene: {
+          preload: preload,
+          create: create,
+          update: update,
+        },
+      };
+
+      const game = new Phaser.Game(config);
+      let player, merchant, enemy;
+      let playerCoins = 10;
+      let weaponsData = [];
+      let selectedWeaponIndex = 0;
+
+      function preload() {
+        this.load.image('tiles', 'tileset.png'); // タイルセットのパス
+        this.load.tilemapTiledJSON('map', 'data/map.json'); // マップデータのパス
+        this.load.spritesheet('player', 'image/player.png', { frameWidth: 32, frameHeight: 48 }); // プレイヤーのスプライトシート
+        this.load.spritesheet('merchant', 'image/merchant.png', { frameWidth: 32, frameHeight: 48 }); // 商人のスプライトシート
+        this.load.spritesheet('enemy', 'image/enemy.png', { frameWidth: 32, frameHeight: 48 }); // 敵のスプライトシート
+        this.load.json('weapons', 'data/weapons.json'); // 剣のデータを読み込み
+      }
+
+      function create() {
+        // 剣データを読み込み
+        weaponsData = this.cache.json.get('weapons').weapons;
+
+        // マップの作成
+        const map = this.make.tilemap({ key: 'map' });
+        const tileset = map.addTilesetImage('tiles');
+        const worldLayer = map.createLayer('Ground', tileset, 0, 0);
+
+        // プレイヤーの作成
+        player = this.physics.add.sprite(100, 100, 'player', 0);
+        this.physics.add.collider(player, worldLayer);
+
+        // 商人の作成
+        merchant = this.physics.add.sprite(400, 100, 'merchant', 0);
+        this.physics.add.overlap(player, merchant, openBuyMenu, null, this);
+
+        // 敵の作成
+        enemy = this.physics.add.sprite(300, 300, 'enemy', 0);
+        enemy.setData({ hp: 18, damage: 2, coins: 3 });
+        this.physics.add.collider(player, enemy, onEnemyCollision, null, this);
+
+        // 移動ボタンの設定
+        document.getElementById('up').onclick = () => movePlayer(0, -160);
+        document.getElementById('down').onclick = () => movePlayer(0, 160);
+        document.getElementById('left').onclick = () => movePlayer(-160, 0);
+        document.getElementById('right').onclick = () => movePlayer(160, 0);
+
+        // 攻撃ボタンの設定
+        document.getElementById('attackButton').onclick = attackEnemy;
+
+        // 購入ボタンの設定
+        document.getElementById('confirmBuy').onclick = buyItem;
+        document.getElementById('cancelBuy').onclick = closeBuyMenu;
+      }
+
+      function update() {
+        // ここでは特に処理なし
+      }
+
+      function movePlayer(x, y) {
+        player.body.setVelocity(x, y);
+      }
+
+      function openBuyMenu() {
+        const buyMenu = document.getElementById('buyMenu');
+        buyMenu.style.display = 'block';
+        updateBuyMessage();
+      }
+
+      function closeBuyMenu() {
+        document.getElementById('buyMenu').style.display = 'none';
+      }
+
+      function updateBuyMessage() {
+        const buyMessage = document.getElementById('buyMessage');
+        const selectedWeapon = weaponsData[selectedWeaponIndex];
+        buyMessage.innerText = `${selectedWeapon.name}を${selectedWeapon.price}コインで購入します。`;
+      }
+
+      function buyItem() {
+        const selectedWeapon = weaponsData[selectedWeaponIndex];
+        if (playerCoins >= selectedWeapon.price) {
+          console.log(`${selectedWeapon.name}を${selectedWeapon.price}コインで購入しました！`);
+          playerCoins -= selectedWeapon.price;
+          // 武器を装備する処理を追加
+          player.attackPower = selectedWeapon.damage; // 武器の攻撃力を設定
+          closeBuyMenu();
+        } else {
+          console.log("コインが足りません。");
+        }
+      }
+
+      function onEnemyCollision(player, enemy) {
+        const enemyData = enemy.getData();
+        console.log(`敵と接触！敵のダメージ: ${enemyData.damage}`);
+        // プレイヤーが受けるダメージを処理するロジックを追加できます
+      }
+
+      function attackEnemy() {
+        const enemyData = enemy.getData();
+        const damage = player.attackPower || 0; // プレイヤーの攻撃力を使用
+
+        // 敵にダメージを与える
+        enemyData.hp -= damage;
+
+        console.log(`敵に${damage}のダメージを与えた！残りHP: ${enemyData.hp}`);
+
+        // HPが0以下の場合、敵を消去
+        if (enemyData.hp <= 0) {
+          console.log("敵を倒した！");
+          enemy.destroy();
+        } else {
+          enemy.setData(enemyData); // HPの更新
+        }
+      }
+    </script>
+  </body>
+</html>
